@@ -5,10 +5,17 @@ from pydantic import BaseModel, Field, ValidationError
 from app.schemas.ingestion import IngestionRequest, IngestionResult
 from app.utils.token_counter import estimate_tokens
 from app.services.llm_service import analyze_message
+from app.schemas.assistant import AssistantResult
+from app.services.response_service import generate_response
+
 
 app = FastAPI(
     title="Enterprise Structured Ingestion Firewall",
-    description="Classifies user messages and validates structured AI output.",
+    description=""" Inspects incoming messages through an enterprise security and validation pipeline:
+    1. **Firewall & Intent Classification:** Validates structure using Pydantic and Instructor to detect threats and categorize intent.
+    2. **Risk & Token Assessment:** Evaluates risk profiles, priority levels, and estimates input tokens.
+    3. **Context-Aware Response Generation:** Generates a tailored, Markdown-formatted reply based on the classified intent and metadata.
+    """,
     version="1.0.0",
 )
 
@@ -27,7 +34,7 @@ def health_check():
     return {"status": "ok", "message": "Ingestion Firewall API is running"}
 
 
-@app.post("/api/analyze", response_model=IngestionResult)
+@app.post("/api/analyze", response_model=AssistantResult)
 def analyze(request: IngestionRequest):
     message = request.message.strip()
     if not message:
@@ -38,7 +45,17 @@ def analyze(request: IngestionRequest):
         # Add a local estimate for context budgeting. Provider-reported token
         # counts may differ; this is not billed-usage accounting.
         result.token_metadata.estimated_input_tokens = estimate_tokens(message)
+        
+     # Week 2: Generate an answer using the detected intent
+        response_markdown = generate_response(result)
+
+        # Return intent details + generated answer
+        return AssistantResult(
+            **result.model_dump(),
+            response_markdown=response_markdown,
+        )
         return result
+    
     except ValidationError as exc:
         raise HTTPException(
             status_code=502,
