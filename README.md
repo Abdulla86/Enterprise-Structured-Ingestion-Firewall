@@ -1,210 +1,147 @@
-# Enterprise Structured Ingestion Firewall
+# Enterprise Structured Ingestion Firewall (ESIF)
 
-An AI-powered message classification that accepts a user message, sends it to a Groq-hosted LLM, and returns structured JSON validated against a Pydantic schema.
+A customer-support AI assistant that puts a **validation layer in front of the LLM**. Every user message is classified into a strict, Pydantic-validated structure (intent, risk, priority, whether action is needed) *before* a reply is written, and the whole conversation is stored in SQLite so follow-up questions keep their context.
 
-The project demonstrates a practical LLM ingestion pipeline using **FastAPI, Groq, Instructor, Pydantic, and a lightweight HTML/CSS/JavaScript frontend**.
+| Part | Stack | Folder |
+|---|---|---|
+| Backend API | Python, FastAPI, Groq LLM, Instructor, Pydantic, SQLite | [`backend/`](backend/README.md) |
+| Frontend app | React 18, Vite 5, React Router, react-markdown | [`frontend/`](frontend/README.md) |
 
-## Features
+---
 
-- Accepts user messages through a web interface and a FastAPI endpoint.
-- Validates incoming requests with Pydantic (`message` must not be blank and must be at most 5,000 characters).
-- Classifies messages into one of these intents:
-  - `greeting`
-  - `order_tracking`
-  - `payment_issue`
-  - `current_time`
-  - `general_question`
-  - `unknown`
-- Produces a structured result containing:
-  - `intent`
-  - `risk_profile`
-  - `priority`
-  - `requires_action`
-  - `summary`
-  - `token_metadata`
-- Uses Instructor to request structured output from the Groq LLM and validate it against the `IngestionResult` schema.
-- Estimates input tokens locally with `tiktoken`.
-- Includes example-message buttons and a copy-JSON action in the frontend.
-- Provides a health-check endpoint.
+## How it works
 
-> **Scope note:** The app classifies messages only. It does not actually look up orders, process refunds, or retrieve the current time. Token counts are estimates and are not billing records.
+```text
+Browser (React, :5173)
+   │  POST /api/analyze  { message, session_id? }
+   ▼
+Vite dev proxy ──► FastAPI (:8000)
+                     1. Validate request          schemas/ingestion.py   (1–5000 chars, no extra fields)
+                     2. Classify message          services/llm_service.py (Groq + Instructor → IngestionResult)
+                     3. Estimate tokens           utils/token_counter.py
+                     4. Load last 12 messages     services/database_service.py
+                     5. Write Markdown answer     services/response_service.py (Groq)
+                     6. Save user + AI messages   services/database_service.py (SQLite)
+                     7. Return AssistantResult    { intent, risk_profile, priority, requires_action,
+                                                    summary, token_metadata, session_id, response_markdown }
+```
 
-## Technology stack
+The assistant **only classifies and answers**. It does not look up real orders, payments, or the time.
 
-| Layer | Technologies |
-|---|---|
-| Backend API | Python, FastAPI, Uvicorn |
-| LLM provider | Groq API |
-| Structured output | Instructor, Pydantic |
-| Token estimation | tiktoken |
-| Frontend | HTML, CSS, JavaScript |
-| Local configuration | `python-dotenv` |
+---
 
 ## Project structure
 
 ```text
-Enterprise Structured Ingestion Firewall/
-├── backend/
-│   ├── app/
-│   │   ├── main.py
-│   │   ├── config.py
-│   │   ├── schemas/
-│   │   │   └── ingestion.py
-│   │   ├── services/
-│   │   │   └── llm_service.py
-│   │   └── utils/
-│   │       └── token_counter.py
-│   ├── .env.example
-│   └── requirements.txt
-└── frontend/
-    ├── index.html
-    ├── style.css
-    └── script.js
+Enterprise-Structured-Ingestion-Firewall/
+├── README.md                         ← you are here (overview)
+├── .gitignore                        ← ignores backend/.env, .venv, __pycache__, editor folders
+│
+├── backend/                          ← FastAPI service  (see backend/README.md)
+│   ├── README.md
+│   ├── requirements.txt              ← Python dependencies
+│   ├── .env                          ← your real secrets (never commit/share)
+│   ├── .env.example                  ← template for .env
+│   └── app/
+│       ├── main.py                   ← FastAPI app + all 4 endpoints
+│       ├── config.py                 ← reads env vars (API key, model, DB path)
+│       ├── schemas/
+│       │   ├── ingestion.py          ← request model + classification result model
+│       │   └── assistant.py          ← final API response model
+│       ├── services/
+│       │   ├── llm_service.py        ← step 1: classify message (structured output)
+│       │   ├── response_service.py   ← step 2: write the Markdown answer
+│       │   ├── database_service.py   ← SQLite: conversations + messages
+│       │   └── conversation_service.py ← older in-memory history (currently unused)
+│       ├── utils/
+│       │   └── token_counter.py      ← local token estimate
+│       └── data/
+│           └── chat.db               ← SQLite file, auto-created at startup
+│
+├── frontend/                         ← React + Vite app  (see frontend/README.md)
+│   ├── README.md
+│   ├── package.json / package-lock.json
+│   ├── vite.config.js                ← dev server + proxy to backend
+│   ├── index.html                    ← page shell
+│   └── src/
+│       ├── main.jsx, App.jsx         ← bootstrap + routes
+│       ├── pages/                    ← Landing.jsx, Chat.jsx
+│       ├── components/               ← Sidebar, MessageList, Composer, InsightsPanel, ...
+│       ├── hooks/                    ← useBackendStatus, useTheme
+│       ├── lib/                      ← api.js, intents.js, time.js
+│       └── styles/                   ← global.css, landing.css, chat.css
+│
+└── gro/                              ← a Python virtual environment (NOT source code)
 ```
 
-## Prerequisites
+> `gro/` is a local Windows (Python 3.14) virtual environment holding installed packages. It is not part of the app and should not be committed. See [Housekeeping](#housekeeping).
 
-- Python 3.10 or later (use a Python version supported by your installed dependencies).
-- A Groq API key.
-- A terminal such as PowerShell, Command Prompt, or a VS Code terminal.
+---
 
-## Setup
+## Quick start
 
-Open a terminal at the project root, then set up the backend:
+You need **Python 3.10+**, **Node.js 18+**, and a free [Groq API key](https://console.groq.com/).
 
-### 1. Create and activate a virtual environment
+**1. Backend** (terminal 1)
 
-**Windows PowerShell:**
-
-```powershell
+```bash
 cd backend
 python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-If PowerShell blocks activation, use Command Prompt:
-
-```bat
-.venv\Scripts\activate.bat
-```
-
-**macOS/Linux:**
-
-```bash
-cd backend
-python3 -m venv .venv
-source .venv/bin/activate
-```
-
-### 2. Install dependencies
-
-Run this from the `backend` directory:
-
-```bash
-python -m pip install --upgrade pip
+# Windows PowerShell:  .\.venv\Scripts\Activate.ps1
+# macOS/Linux:         source .venv/bin/activate
 pip install -r requirements.txt
+cp .env.example .env          # then edit .env and add your GROQ_API_KEY
+uvicorn app.main:app --reload --port 8000
 ```
 
-### 3. Configure the Groq API key
+API docs: http://127.0.0.1:8000/docs
 
-Copy `backend/.env.example` to `backend/.env`, then replace the placeholder with your own key:
-
-```dotenv
-GROQ_API_KEY=your_actual_groq_api_key
-GROQ_MODEL=openai/gpt-oss-120b
-```
-
-Keep `.env` private. Do not commit it to GitHub or share it in screenshots. If a real API key was included in a shared ZIP or repository, revoke it and create a replacement.
-
-## Run the application
-
-Run the backend and frontend in **two separate terminals**.
-
-### Terminal 1 — Backend
-
-From the project root:
-
-```bash
-cd backend
-uvicorn app.main:app --reload
-```
-
-The API should be available at:
-
-- API base URL: `http://127.0.0.1:8000`
-- Interactive Swagger documentation: `http://127.0.0.1:8000/docs`
-- Health check: `http://127.0.0.1:8000/health`
-
-### Terminal 2 — Frontend
-
-From the project root, open a second terminal:
+**2. Frontend** (terminal 2)
 
 ```bash
 cd frontend
-python -m http.server 5500
+npm install
+npm run dev
 ```
 
-Then open **http://127.0.0.1:5500** in your browser.
+Open http://localhost:5173
 
-The frontend JavaScript sends requests to `http://127.0.0.1:8000`, so keep the backend running while using the UI.
+---
 
-## API endpoint
+## API at a glance
 
-### `GET /health`
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/health` | Is the API up? |
+| GET | `/api/conversations` | Recent chats for the sidebar (latest 30) |
+| GET | `/api/conversations/{session_id}/messages` | Full message history of one chat |
+| POST | `/api/analyze` | Classify a message, generate a reply, save both |
 
-Checks whether the API is running.
+Details and example payloads: [`backend/README.md`](backend/README.md).
 
-Example response:
+---
 
-```json
-{
-  "status": "ok",
-  "message": "Ingestion Firewall API is running"
-}
-```
+## Intent values
 
-### `POST /api/analyze`
+Defined once in `backend/app/schemas/ingestion.py` and mirrored for display in `frontend/src/lib/intents.js`. If you add one, update both.
 
-Request body:
+| Field | Allowed values |
+|---|---|
+| `intent` | `greeting`, `order_tracking`, `payment_issue`, `current_time`, `general_question`, `unknown` |
+| `risk_profile` | `low`, `medium`, `high`, `unknown` |
+| `priority` | `low`, `medium`, `high` |
 
-```json
-{
-  "message": "My payment was deducted twice. Please help urgently."
-}
-```
+---
 
-The successful response contains the validated fields `intent`, `risk_profile`, `priority`, `requires_action`, `summary`, and `token_metadata`. Exact values depend on the model's classification of the message.
+## Housekeeping
 
-Example request using curl:
+Things worth tidying up, found while documenting the project:
 
-```bash
-curl -X POST "http://127.0.0.1:8000/api/analyze" \
-  -H "Content-Type: application/json" \
-  -d "{\"message\":\"Where is my order?\"}"
-```
-
-## How it works
-
-1. The user enters a message in the frontend.
-2. JavaScript sends the message as JSON to `POST /api/analyze`.
-3. FastAPI validates the request using `IngestionRequest`.
-4. The LLM service sends the message and system instructions to Groq through Instructor.
-5. Instructor requests a response matching `IngestionResult`; Pydantic validates the structured fields.
-6. FastAPI adds a local estimate of the input token count and returns the JSON.
-7. The frontend displays the response and allows the user to copy it.
-
-## Troubleshooting
-
-- **LLM request failed / HTTP 502:** Check that `backend/.env` exists, `GROQ_API_KEY` is valid, the model name is available to your account, the network is working, and provider limits have not been reached.
-- **Frontend cannot connect:** Start the backend first and confirm `http://127.0.0.1:8000/health` responds.
-- **Port already in use:** Start Uvicorn on another port or choose another port for the frontend server, then update the frontend API URL if the backend port changes.
-- **Missing package:** Activate the backend virtual environment and run `pip install -r requirements.txt`.
-- **PowerShell activation issue:** Use `.\.venv\Scripts\python.exe -m pip install -r requirements.txt` and `.\.venv\Scripts\uvicorn.exe app.main:app --reload` if you cannot activate the environment.
-
-## Security and production notes
-
-- Never commit `.env` or API keys.
-- Configure CORS with the exact frontend origin before deploying; the current wildcard setting is intended for local development.
-- Add authentication, rate limiting, monitoring, and production-grade error handling before exposing the API publicly.
-- Treat the LLM result as model-generated data even though it is schema-validated; schema validation ensures structure, not factual correctness.
-
+1. **Virtual environment in the project root.** `gro/` is not covered by `.gitignore`. Add `gro/` to the root `.gitignore` (and remove it from Git if already tracked), then recreate your environment as `backend/.venv`, which *is* ignored.
+2. **Secrets.** `backend/.env` holds your real Groq key. It is git-ignored, but don't zip/share the folder with it inside. Regenerate the key if it was ever shared.
+3. **`.env.example` placeholder.** The `SQLITE_PATH` line contains a sentence instead of a path. If copied as-is it becomes the database path. Delete the line or set it to something like `data/chat.db`.
+4. **Missing favicon.** `index.html` points to `/favicon.svg`, but there is no `frontend/public/` folder. Add `frontend/public/favicon.svg` or remove the `<link>`.
+5. **Unused file.** `conversation_service.py` (in-memory history) is not imported anywhere; history now comes from SQLite. Safe to delete if you don't need it.
+6. **Database file in the repo.** `backend/app/data/chat.db` is runtime data (your chat history). Consider adding `*.db` to `.gitignore`.
+7. **Landing-page GitHub link.** `Landing.jsx` links to a different repository than the one in `.git/config`. Update `REPO_URL` if that's not intended.
+8. **CORS is open** (`allow_origins=["*"]`). Fine for local development; restrict it before deploying.

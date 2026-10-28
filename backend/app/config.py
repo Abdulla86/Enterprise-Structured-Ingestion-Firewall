@@ -11,3 +11,6 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY","").strip()
 # Retrieve the GROQ_API_KEY from environment variables
 GROQ_MODEL = os.getenv("GROQ_MODEL","openai/gpt-oss-120b").strip() 
 # Retrieve the GROQ_MODEL from environment variables
+
+# Relative paths are resolved from the backend folder, not the current directory.
+SQLITE_PATH = str(BACKEND_DIR / (os.getenv("SQLITE_PATH", "").strip() or "data/chat.db"))

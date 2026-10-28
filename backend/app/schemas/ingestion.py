@@ -17,6 +17,16 @@ Priority = Literal["low", "medium", "high"]
 
 class IngestionRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")  # it tells us to forbid any extra fields in the model
+    
+    session_id:str | None =Field(
+        default=None,
+        min_length=1,
+        max_length=100,
+        description="optional conversation session identifier"
+    )
+
+
+
 
     message: str = Field(
         min_length=1,
