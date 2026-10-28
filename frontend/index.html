@@ -1,81 +1,19 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
+  <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AI Assistant</title>
-    <link rel="stylesheet" href="style.css" />
-
-    <!-- Markdown rendering and safe HTML sanitization -->
-    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
-</head>
-<body>
-    <div class="app">
-
-        <aside class="sidebar">
-            <div class="brand">
-                <div class="brand-icon">✦</div>
-                <div>
-                    <h2>AI Assistant</h2>
-                    <p>Get help with your queries</p>
-                </div>
-            </div>
-
-            <button id="new-chat" class="new-chat">＋ New Chat</button>
-
-            <div class="sidebar-section">
-                <h3>Suggested Prompts</h3>
-                <button class="suggestion">My payment was deducted twice. What should I do?</button>
-                <button class="suggestion">How can I reset my password?</button>
-                <button class="suggestion">I want to check my order status.</button>
-                <button class="suggestion">What are your refund policies?</button>
-                <button class="suggestion">How do I contact customer support?</button>
-            </div>
-
-            <div class="backend-status">
-                <span class="status-dot"></span>
-                <div>
-                    <strong id="backend-status">Checking backend...</strong>
-                    <p>FastAPI + Groq</p>
-                </div>
-            </div>
-        </aside>
-
-        <main class="chat-panel">
-            <header class="chat-header">
-                <h2 id="chat-title">New Chat</h2>
-            </header>
-
-            <section id="chat-messages" class="chat-messages">
-                <div id="welcome" class="welcome">
-                    <div class="welcome-icon">✦</div>
-                    <h1>How can I help you?</h1>
-                    <p>Ask a question to get started.</p>
-                </div>
-            </section>
-
-            <div id="error-message" class="error-message" hidden></div>
-
-            <form id="chat-form" class="chat-form">
-                <textarea
-                    id="message-input"
-                    placeholder="Type your message..."
-                    rows="1"
-                    required
-                ></textarea>
-                <button id="send-button" type="submit" aria-label="Send message">
-                    ➤
-                </button>
-            </form>
-
-            <p class="disclaimer">
-                AI-generated responses may not always be accurate.
-            </p>
-        </main>
-
-    </div>
-
-    <script src="script.js"></script>
-</body>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
 </html>
