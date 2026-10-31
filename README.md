@@ -1,4 +1,6 @@
-# Enterprise Structured Ingestion Firewall (ESIF)
+# Indigo AI 
+
+## Intellegent Message Processiong & Response Platform
 
 A customer-support AI assistant that puts a **validation layer in front of the LLM**. Every user message is classified into a strict, Pydantic-validated structure (intent, risk, priority, whether action is needed) *before* a reply is written, and the whole conversation is stored in SQLite so follow-up questions keep their context.
 
